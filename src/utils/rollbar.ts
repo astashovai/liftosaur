@@ -73,7 +73,10 @@ export namespace RollbarUtils {
 
   export function checkIgnore(isUncaught: boolean, args: LogArgument[], item: Dictionary): boolean {
     const firstArg = args[0];
-    const message = typeof firstArg === "object" && "message" in firstArg ? firstArg.message : firstArg;
+    let message = typeof firstArg === "object" && "message" in firstArg ? firstArg.message : firstArg;
+    if (typeof message === "object") {
+      message = JSON.stringify(message);
+    }
     if (message && typeof message === "string" && exceptionIgnores.some((i) => message.indexOf(i) !== -1)) {
       return true;
     }
