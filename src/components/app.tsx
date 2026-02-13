@@ -410,6 +410,7 @@ export function AppView(props: IProps): JSX.Element | null {
   } else if (Screen.currentName(state.screenStack) === "progress") {
     const progress = Progress.getProgress(state);
     if (progress == null) {
+      dispatch(Thunk.pushScreen("main", undefined, true));
       return null;
     }
     const program = Progress.isCurrent(progress)
