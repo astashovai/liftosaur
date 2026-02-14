@@ -7,6 +7,7 @@ import { PlannerExerciseEvaluator } from "../pages/planner/plannerExerciseEvalua
 import { basicBeginnerProgram } from "../programs/basicBeginnerProgram";
 import { IVersions } from "../models/versionTracker";
 import { Settings } from "../models/settings";
+import { lg } from "../utils/posthog";
 
 let latestMigrationVersion: number | undefined;
 export function getLatestMigrationVersion(): string {
@@ -364,31 +365,62 @@ export const migrations = {
     }
     return storage;
   },
-  "20260211120000_add_vtypes_to_progress": (aStorage: IStorage): IStorage => {
+  "20260211120000_log_missing_vtypes_in_progress": (aStorage: IStorage): IStorage => {
     const storage: IStorage = JSON.parse(JSON.stringify(aStorage));
     for (const record of storage.progress || []) {
-      record.vtype = record.vtype || "progress";
+      const missingFields: string[] = [];
+
+      if (!record.vtype) {
+        missingFields.push("record.vtype");
+      }
+
       const progressUi = record.ui;
       if (progressUi) {
-        progressUi.vtype = progressUi.vtype || "progress_ui";
+        if (!progressUi.vtype) {
+          missingFields.push("ui.vtype");
+        }
         if (!progressUi.id) {
-          progressUi.id = UidFactory.generateUid(8);
+          missingFields.push("ui.id");
         }
       }
+
       for (let entryIndex = 0; entryIndex < record.entries.length; entryIndex++) {
         const entry = record.entries[entryIndex];
-        entry.vtype = entry.vtype || "history_entry";
-        entry.index = entry.index ?? entryIndex;
+        if (!entry.vtype) {
+          missingFields.push(`entry[${entryIndex}].vtype`);
+        }
+        if (entry.index == null) {
+          missingFields.push(`entry[${entryIndex}].index`);
+        }
+
         for (let setIndex = 0; setIndex < entry.sets.length; setIndex++) {
           const set = entry.sets[setIndex];
-          set.vtype = set.vtype || "set";
-          set.index = set.index ?? setIndex;
+          if (!set.vtype) {
+            missingFields.push(`entry[${entryIndex}].sets[${setIndex}].vtype`);
+          }
+          if (set.index == null) {
+            missingFields.push(`entry[${entryIndex}].sets[${setIndex}].index`);
+          }
         }
+
         for (let setIndex = 0; setIndex < entry.warmupSets.length; setIndex++) {
           const set = entry.warmupSets[setIndex];
-          set.vtype = set.vtype || "set";
-          set.index = set.index ?? setIndex;
+          if (!set.vtype) {
+            missingFields.push(`entry[${entryIndex}].warmupSets[${setIndex}].vtype`);
+          }
+          if (set.index == null) {
+            missingFields.push(`entry[${entryIndex}].warmupSets[${setIndex}].index`);
+          }
         }
+      }
+
+      if (missingFields.length > 0) {
+        lg("ls-missing-vtypes-in-progress", {
+          missingFields: missingFields.join(", "),
+          recordId: record.id,
+          programId: record.programId,
+          dayName: record.day,
+        });
       }
     }
     return storage;
